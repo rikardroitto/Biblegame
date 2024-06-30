@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guess the Bible Verse</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        #score {
+            font-size: 20px;
+            margin: 10px;
+        }
+        #verse {
+            font-size: 24px;
+            text-align: center;
+            margin: 20px;
+        }
+        .button-container {
+            margin: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .book-button, .chapter-button, .verse-button {
+            padding: 10px 20px;
+            font-size: 18px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        #newGameButton {
+            display: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Round: 1 | Score: 0</div>
+    <div id="verse">Click the button to get a random Bible verse</div>
+    <div id="buttons" class="button-container"></div>
+    <button id="newGameButton">New Game</button>
+
+    <script>
+        const API_KEY = '4ce3d74e07e389351abf2e80d5a67057';
+        const BIBLE_ID = '65eec8e0b60e656b-01';
+        let correctBookId = '';
+        let correctChapterId = '';
+        let correctVerseId = '';
+        let round = 1;
+        let score = 0;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchRandomVerse();
+        });
+
+        document.getElementById('newGameButton').addEventListener('click', () => {
+            round = 1;
+            score = 0;
+            document.getElementById('score').textContent = `Round: ${round} | Score: ${score}`;
+            fetchRandomVerse();
+            document.getElementById('newGameButton').style.display = 'none';
+        });
+
+        async function fetchRandomVerse() {
+            try {
+                const booksResponse = await fetch(`https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books`, {
+                    method: 'GET',
+                    headers: {
+                        'api-key': API_KEY
+                    }
+                });
+                const booksData = await booksResponse.json();
+                const books = booksData.data;
+
+                const randomBook = books[Math.floor(Math.random() * books.length)];
+                correctBookId = randomBook.id;
+                
+                const chaptersResponse = await fetch(`https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books/${randomBook.id}/chapters`, {
+                    method: 'GET',
+                    headers: {
+                        'api-key': API_KEY
+                    }
+                });
+                const chaptersData = await chaptersResponse.json();
+                const chapters = chaptersData.data;
+
+                const randomChapter = chapters[Math.floor(Math.random() * chapters.length)];
+                correctChapterId = randomChapter.id;
+                
+                const versesResponse = await fetch(`https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/chapters/${randomChapter.id}/verses`, {
+                    method: 'GET',
+                    headers: {
+                        'api-key': API_KEY
+                    }
+                });
+                const versesData = await versesResponse.json();
+                const verses = versesData.data;
+
+                const randomVerse = verses[Math.floor(Math.random() * verses.length)];
+                correctVerseId = randomVerse.id;
+                
+                const verseResponse = await fetch(`https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/verses/${randomVerse.id}?content-type=text`, {
+                    method: 'GET',
+                    headers: {
+                        'api-key': API_KEY
+                    }
+                });
+                const verseData = await verseResponse.json();
+                const verseText = verseData.data.content;
+
+                if (verseText.includes("undefined")) {
+                    console.log("Rerolling due to undefined verse text.");
+                    fetchRandomVerse();
+                    return;
+                }
+
+                const verseReference = verseData.data.reference.split('.')[0];
+                document.getElementById('verse').innerHTML = `${verseText.split(']')[1]}`;
+
+                displayBookButtons(books, verseReference);
+            } catch (error) {
+                console.error('Error fetching the verse:', error);
+                document.getElementById('verse').textContent = 'Could not fetch verse. Please try again.';
+            }
+        }
+
+        function displayBookButtons(books, verseReference) {
+            const buttonsDiv = document.getElementById('buttons');
+            buttonsDiv.innerHTML = '';
+            books.forEach(book => {
+                const button = document.createElement('button');
+                button.textContent = book.name;
+                button.classList.add('book-button');
+                button.addEventListener('click', () => checkBookAnswer(book.id, verseReference));
+                buttonsDiv.appendChild(button);
+            });
+        }
+
+        function displayChapterButtons(chapters) {
+            const buttonsDiv = document.getElementById('buttons');
+            buttonsDiv.innerHTML = '';
+            chapters.forEach(chapter => {
+                const button = document.createElement('button');
+                button.textContent = chapter.reference.split('.').pop();
+                button.classList.add('chapter-button');
+                button.addEventListener('click', () => checkChapterAnswer(chapter.id));
+                buttonsDiv.appendChild(button);
+            });
+        }
+
+        function displayVerseButtons(verses) {
+            const buttonsDiv = document.getElementById('buttons');
+            buttonsDiv.innerHTML = '';
+            verses.forEach(verse => {
+                const button = document.createElement('button');
+                button.textContent = verse.reference.split('.').pop();
+                button.classList.add('verse-button');
+                button.addEventListener('click', () => checkVerseAnswer(verse.id));
+                buttonsDiv.appendChild(button);
+            });
+        }
+
+        async function checkBookAnswer(selectedBookId, verseReference) {
+            if (selectedBookId === correctBookId) {
+                score++;
+                document.getElementById('score').textContent = `Round: ${round} | Score: ${score}`;
+                const chaptersResponse = await fetch(`https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/books/${correctBookId}/chapters`, {
+                    method: 'GET',
+                    headers: {
+                        'api-key': API_KEY
+                    }
+                });
+                const chaptersData = await chaptersResponse.json();
+                const chapters = chaptersData.data;
+                displayChapterButtons(chapters);
+            } else {
+                alert(`Wrong! The verse is from ${verseReference}.`);
+                nextRound();
+            }
+        }
+
+        async function checkChapterAnswer(selectedChapterId) {
+            if (selectedChapterId === correctChapterId) {
+                score++;
+                document.getElementById('score').textContent = `Round: ${round} | Score: ${score}`;
+                const versesResponse = await fetch(`https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/chapters/${correctChapterId}/verses`, {
+                    method: 'GET',
+                    headers: {
+                        'api-key': API_KEY
+                    }
+                });
+                const versesData = await versesResponse.json();
+                const verses = versesData.data;
+                displayVerseButtons(verses);
+            } else {
+                alert(`Wrong! The verse is from chapter ${correctChapterId.split('.').pop()}.`);
+                nextRound();
+            }
+        }
+
+        function checkVerseAnswer(selectedVerseId) {
+            if (selectedVerseId === correctVerseId) {
+                score++;
+                alert(`Congratulations! You guessed the correct verse!`);
+                nextRound();
+            } else {
+                alert(`Wrong! The correct verse is ${correctVerseId.split('.').pop()}.`);
+                nextRound();
+            }
+        }
+
+        function nextRound() {
+            if (round < 10) {
+                round++;
+                document.getElementById('score').textContent = `Round: ${round} | Score: ${score}`;
+                fetchRandomVerse();
+            } else {
+                document.getElementById('verse').textContent = `Game over! You scored ${score} points.`;
+                document.getElementById('buttons').innerHTML = '';
+                document.getElementById('newGameButton').style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
